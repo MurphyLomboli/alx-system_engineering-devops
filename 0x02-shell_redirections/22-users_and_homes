@@ -1,0 +1,2 @@
+#!/bin/bash
+Cut -d :if 1,6 /etc/passwd | sort
