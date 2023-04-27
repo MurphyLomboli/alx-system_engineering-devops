@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# A script that configures Nginx server so that /redirect_me is redirecting to another page.
+
+# Create a new configuration file for the site
+sudo tee /etc/nginx/sites-available/redirect.conf > /dev/null <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name redirect.webmurphy.tech;
+
+    location /redirect_me {
+        return 301 http://webmurphy.tech/;
+    }
+}
+EOF
+
+# Create a symbolic link to enable the new configuration file
+sudo ln -sf /etc/nginx/sites-available/redirect.conf /etc/nginx/sites-enabled/
+
+# Test the Nginx configuration
+sudo nginx -t
+
+# Reload the Nginx service
+sudo service nginx reload
