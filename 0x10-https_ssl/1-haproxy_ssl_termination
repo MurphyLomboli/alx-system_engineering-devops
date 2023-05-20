@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+# Set your domain name
+DOMAIN="webmurphy.tech"
+SUBDOMAIN="www.webmurphy.tech"
+
+# Install Certbot
+apt-get update
+apt-get install -y certbot
+
+# Obtain SSL certificate
+certbot certonly --standalone --preferred-challenges http -d $SUBDOMAIN.$DOMAIN
+
+# Generate a new Diffie-Hellman group
+openssl dhparam -out /etc/haproxy/dhparam.pem 2048
+
+# To update HAproxy config file
+cat <<EOF > /etc/haproxy/haproxy.cfg
+global
+    log /dev/log    local0
+    log /dev/log    local1 notice
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    daemon
+
+    # Default SSL material locations
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # Default ciphers to use on SSL-enabled listening sockets.
+    # For more information, see ciphers(1SSL).
+    ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
+    ssl-default-bind-options no-sslv3
+
+defaults
+    log global
+    mode http
+    option httplog
+    option dontlognull
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+    errorfile 400 /etc/haproxy/errors/400.http
+    errorfile 403 /etc/haproxy/errors/403.http
+    errorfile 408 /etc/haproxy/errors/408.http
+    errorfile 500 /etc/haproxy/errors/500.http
+    errorfile 502 /etc/haproxy/errors/502.http
+    errorfile 503 /etc/haproxy/errors/503.http
+    errorfile 504 /etc/haproxy/errors/504.http
+
+frontend my_bowser
+        bind *:80
+	bind *:443 ssl crt /etc/letsencrypt/live/$SUBDOMAIN.$DOMAIN/fullchain.pem
+	http-request redirect scheme https unless { ssl_fc }
+	
+	#lets encrypt the validation path
+	acl letsencrypt-acl path_beg /./well-known/acme-challenge/
+	use_backend letsencrypt-backend if letsencrypt-acl
+
+        default_backend server_side
+
+backend server_side
+        balance roundrobin
+        server 163945-web-01 107.23.119.223:80 check
+        server 163945-web-02 54.84.33.47:80 check
+
+backend letsencrypt-backend
+	server certbot 127.0.0.1:8888
+
+EOF
+
+# Restart HAproxy
+sudo service haproxy restart
